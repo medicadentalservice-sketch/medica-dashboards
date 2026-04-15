@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ahmad — KPI Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@700;800&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0a0c10; --surface: #111318; --surface2: #181c23; --border: #ffffff0f;
+    --accent: #a855f7; --accent3: #4d9fff; --text: #f0f2f7; --muted: #6b7280;
+    --closed: #00e5a0; --open: #4d9fff; --inprogress: #f0b429; --waiting: #ff6b35;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'DM Mono',monospace; background:var(--bg); color:var(--text); min-height:100vh; }
+  body::before { content:''; position:fixed; inset:0; background-image:linear-gradient(var(--border) 1px,transparent 1px),linear-gradient(90deg,var(--border) 1px,transparent 1px); background-size:40px 40px; pointer-events:none; z-index:0; }
+  .container { position:relative; z-index:1; max-width:1100px; margin:0 auto; padding:40px 24px; }
+  header { display:flex; align-items:flex-start; justify-content:space-between; margin-bottom:32px; flex-wrap:wrap; gap:20px; }
+  .logo-area h1 { font-family:'Syne',sans-serif; font-size:24px; font-weight:800; }
+  .logo-area h1 span { color:var(--accent); }
+  .logo-area p { font-size:11px; color:var(--muted); margin-top:4px; letter-spacing:2px; text-transform:uppercase; }
+  .live-badge { display:flex; align-items:center; gap:8px; background:var(--surface); border:1px solid var(--border); padding:8px 16px; border-radius:100px; font-size:11px; color:var(--muted); }
+  .live-dot { width:7px; height:7px; background:var(--accent); border-radius:50%; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)}50%{opacity:.4;transform:scale(.8)} }
+  
+  #loading { display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:60vh; gap:20px; }
+  .spinner { width:40px; height:40px; border:3px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  #content { display:none; animation:fadeIn .4s ease; }
+  @keyframes fadeIn { from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)} }
+
+  .dash-header { display:flex; align-items:center; justify-content:space-between; margin-bottom:24px; flex-wrap:wrap; gap:16px; }
+  .engineer-info { display:flex; align-items:center; gap:16px; }
+  .engineer-avatar { width:52px; height:52px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:'Syne',sans-serif; font-size:18px; font-weight:800; background:#a855f725; border:2px solid #a855f760; color:#a855f7; }
+  
+  .stats-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:16px; margin-bottom:28px; }
+  @media(max-width:700px){.stats-grid{grid-template-columns:repeat(2,1fr)}}
+  .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:20px; position:relative; overflow:hidden; transition:all 0.2s; cursor:pointer; }
+  .stat-card:hover { transform:translateY(-3px); background:var(--surface2); }
+  .stat-card.active-filter { border: 1px solid white; box-shadow: 0 0 15px rgba(168,85,247,0.1); }
+  .stat-card::after { content:''; position:absolute; bottom:0; left:0; right:0; height:2px; }
+  .stat-card.closed::after{background:var(--closed)} .stat-card.open::after{background:var(--open)} .stat-card.inprogress::after{background:var(--inprogress)} .stat-card.waiting::after{background:var(--waiting)}
+  .stat-label { font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); margin-bottom:12px; }
+  .stat-value { font-family:'Syne',sans-serif; font-size:42px; font-weight:800; line-height:1; }
+  .stat-card.closed .stat-value{color:var(--closed)} .stat-card.open .stat-value{color:var(--open)} .stat-card.inprogress .stat-value{color:var(--inprogress)} .stat-card.waiting .stat-value{color:var(--waiting)}
+
+  .chart-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:24px; margin-bottom:28px; }
+  .bar-row { display:flex; align-items:center; gap:12px; margin-bottom:14px; }
+  .bar-label { font-size:11px; color:var(--muted); width:180px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .bar-track { flex:1; height:8px; background:var(--surface2); border-radius:100px; overflow:hidden; }
+  .bar-fill { height:100%; border-radius:100px; background:var(--accent); transition:width .8s ease; }
+  
+  .table-section { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+  table { width:100%; border-collapse:collapse; font-size:12px; }
+  th { padding:12px 16px; text-align:left; font-size:10px; text-transform:uppercase; color:var(--muted); background:var(--surface2); }
+  td { padding:12px 16px; border-bottom:1px solid var(--border); }
+  .status-badge { display:inline-flex; align-items:center; gap:5px; padding:3px 10px; border-radius:100px; font-size:10px; font-weight:600; }
+  .status-badge::before { content:''; width:5px; height:5px; border-radius:50%; background:currentColor; }
+  .badge-closed{background:#00e5a015;color:var(--closed);border:1px solid #00e5a030}
+  .badge-new{background:#4d9fff15;color:var(--open);border:1px solid #4d9fff30}
+  .badge-inprogress{background:#f0b42915;color:var(--inprogress);border:1px solid #f0b42930}
+  .badge-waiting{background:#ff6b3515;color:var(--waiting);border:1px solid #ff6b3530}
+  
+  .refresh-btn { background:var(--accent); border:none; color:#000; padding:10px 20px; border-radius:8px; cursor:pointer; font-family:'Syne',sans-serif; font-size:12px; font-weight:700; }
+  .spinning span { animation:spin 0.8s linear infinite; display:inline-block; }
+</style>
+</head>
+<body>
+<div class="container">
+  <header>
+    <div class="logo-area">
+      <h1>Ahmad's <span>Workspace</span></h1>
+      <p>Performance & Service Tracking</p>
+    </div>
+    <div class="live-badge"><div class="live-dot"></div>LIVE DATA</div>
+  </header>
+
+  <div id="loading"><div class="spinner"></div><p>Syncing with Google Sheets...</p></div>
+
+  <div id="content">
+    <div class="dash-header">
+      <div class="engineer-info">
+        <div class="engineer-avatar">A</div>
+        <div>
+          <div class="engineer-name" style="color:#a855f7">Ahmad</div>
+          <div class="engineer-role">Field Engineer</div>
+        </div>
+      </div>
+      <button class="refresh-btn" onclick="loadData()" id="rbtn"><span>↻</span> Refresh</button>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-card closed" onclick="filterTable('Closed', this)">
+        <div class="stat-label">Closed</div>
+        <div class="stat-value" id="stat-closed">0</div>
+      </div>
+      <div class="stat-card open" onclick="filterTable('New', this)">
+        <div class="stat-label">New / Open</div>
+        <div class="stat-value" id="stat-open">0</div>
+      </div>
+      <div class="stat-card inprogress" onclick="filterTable('In Progress', this)">
+        <div class="stat-label">In Progress</div>
+        <div class="stat-value" id="stat-inprogress">0</div>
+      </div>
+      <div class="stat-card waiting" onclick="filterTable('Waiting', this)">
+        <div class="stat-label">Waiting Parts</div>
+        <div class="stat-value" id="stat-waiting">0</div>
+      </div>
+    </div>
+
+    <div class="chart-section">
+      <div class="section-title" style="color:var(--muted); font-size:10px; letter-spacing:2px; text-transform:uppercase; margin-bottom:15px;">Clinic Volume</div>
+      <div id="clinic-chart"></div>
+    </div>
+
+    <div class="table-section">
+      <div style="padding:16px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between;">
+        <span id="table-title" style="font-size:12px; font-weight:700;">Ticket Ledger</span>
+        <span id="tcount" style="font-size:11px; color:var(--muted);"></span>
+      </div>
+      <table>
+        <thead><tr><th>#</th><th>Clinic</th><th>Status</th><th>Date</th><th>Problem</th></tr></thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjKYbJDYGnxVctc20i5d2NdYijCLHWWEqE8LzHS7yRdGRP8GHioFcWfg6X7ai36xLR/exec";
+let allData = [];
+let personalTickets = [];
+let activeFilter = null;
+
+window.onload = () => loadData();
+
+async function loadData() {
+  const btn = document.getElementById('rbtn');
+  btn.classList.add('spinning');
+  try {
+    const res = await fetch(SCRIPT_URL + "?t=" + Date.now());
+    allData = await res.json();
+    personalTickets = allData.filter(r => (r['Name'] || '').trim() === "Ahmad");
+    
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('content').style.display = 'block';
+    
+    updateStats();
+    updateChart();
+    renderTable(personalTickets);
+  } catch(e) {
+    console.error(e);
+  }
+  btn.classList.remove('spinning');
+}
+
+function updateStats() {
+  const c = {closed:0, open:0, inprogress:0, waiting:0};
+  personalTickets.forEach(r => {
+    const s = (r['Current Status'] || '').toLowerCase();
+    if(s==='closed') c.closed++;
+    else if(s==='new') c.open++;
+    else if(s==='in progress') c.inprogress++;
+    else if(s.includes('waiting')) c.waiting++;
+  });
+  animNum('stat-closed', c.closed);
+  animNum('stat-open', c.open);
+  animNum('stat-inprogress', c.inprogress);
+  animNum('stat-waiting', c.waiting);
+}
+
+function filterTable(status, element) {
+  const titleEl = document.getElementById('table-title');
+  document.querySelectorAll('.stat-card').forEach(c => c.classList.remove('active-filter'));
+
+  if (activeFilter === status) {
+    activeFilter = null;
+    titleEl.innerText = "Ticket Ledger";
+    renderTable(personalTickets);
+  } else {
+    activeFilter = status;
+    element.classList.add('active-filter');
+    titleEl.innerText = status + " Tickets";
+    const filtered = personalTickets.filter(r => {
+        const s = (r['Current Status'] || '').toLowerCase();
+        if (status === 'Waiting') return s.includes('waiting');
+        return s === status.toLowerCase();
+    });
+    renderTable(filtered);
+  }
+}
+
+function renderTable(data) {
+  document.getElementById('tcount').textContent = data.length + ' visible';
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = data.map((r,i) => {
+    const s = r['Current Status'] || 'New';
+    const bc = s.toLowerCase()==='closed'?'badge-closed':s.toLowerCase()==='new'?'badge-new':s.toLowerCase()==='in progress'?'badge-inprogress':'badge-waiting';
+    return `<tr>
+      <td style="color:var(--muted)">${i+1}</td>
+      <td>${r['Customer/Account Name'] || '-'}</td>
+      <td><span class="status-badge ${bc}">${s}</span></td>
+      <td style="color:var(--muted)">${r['Request Date'] || '-'}</td>
+      <td style="max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r['Problem Description'] || '-'}</td>
+    </tr>`;
+  }).join('');
+}
+
+function updateChart() {
+  const clinics = {};
+  personalTickets.forEach(r => {
+    const c = r['Customer/Account Name'] || 'Unknown';
+    clinics[c] = (clinics[c]||0)+1;
+  });
+  const sorted = Object.entries(clinics).sort((a,b)=>b[1]-a[1]);
+  const max = sorted[0]?.[1]||1;
+  document.getElementById('clinic-chart').innerHTML = sorted.map(([name, count]) => `
+    <div class="bar-row">
+      <div class="bar-label">${name}</div>
+      <div class="bar-track"><div class="bar-fill" style="width:${(count/max*100)}%"></div></div>
+      <div class="bar-count">${count}</div>
+    </div>`).join('');
+}
+
+function animNum(id, target) {
+  const el = document.getElementById(id);
+  let cur = 0; if (target === 0) { el.textContent = 0; return; }
+  const step = Math.ceil(target/20)||1;
+  const t = setInterval(()=>{ cur=Math.min(cur+step,target); el.textContent=cur; if(cur>=target) clearInterval(t); },40);
+}
+</script>
+</body>
+</html>
